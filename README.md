@@ -1,125 +1,165 @@
 # Mini Blog API
 
-A FastAPI service for publishing posts with authors and tags. Readers can search titles, browse paginated results, and find posts by tag. SQLAlchemy stores the data in SQLite for a quick local run or PostgreSQL for development.
+A Python backend for publishing blog posts with authors and tags. Readers can search titles, browse paginated results, and filter posts by tag. Writers sign in with a demo account and use a short-lived JWT to create, update, or delete posts.
 
 ## Project overview
 
-A post can have one author and several tags. When two posts use the same author email or tag name, the API reuses the matching record. Readers can retrieve a full post, request just its ID and title, or find posts that share a tag.
+Each post has a unique title, content, an optional author, and a list of tags. Posts can share authors and tags. The API reuses authors by email and looks up existing tags by name when creating a post.
+
+The application is organized by responsibility. FastAPI routers handle HTTP requests, Pydantic schemas define request and response data, and a repository handles post queries through SQLAlchemy. SQLite provides a quick local setup. PostgreSQL is available through the same database configuration.
 
 ## Project goals
 
-- Build a complete publishing workflow from request validation through database storage to the HTTP response.
-- Make the API easy to explore from a fresh checkout using SQLite and interactive documentation.
-- Evolve the project in documented stages, starting with a modular layout and then adding database migrations and container support.
+- Build a complete publishing workflow with persistent storage, input validation, search, and pagination.
+- Keep public reading endpoints accessible while requiring authentication for writes.
+- Make each stage of development reproducible, from the initial CRUD API through modularization, authentication, and future database migrations.
 
 ## Tech stack
 
 | Technology | Role |
 | --- | --- |
-| Python 3.12 and FastAPI | Application runtime, HTTP routing, and interactive API documentation |
-| Pydantic | Request validation and response schemas |
-| SQLAlchemy | Relational models, queries, and database sessions |
-| SQLite / PostgreSQL | Local file storage by default, or a PostgreSQL server using the Psycopg driver |
-| python-dotenv | Load local database settings from an optional `.env` file |
+| Python 3.12 and FastAPI | Application runtime, HTTP routes, and interactive documentation |
+| Pydantic | Request validation and response models |
+| SQLAlchemy | Database sessions, relational models, and queries |
+| SQLite or PostgreSQL | Post, author, and tag storage |
+| Psycopg | PostgreSQL driver |
+| PyJWT | Signing and verifying HS256 access tokens |
 
-## Requirements
+## Requirements and local installation
 
-Install Python 3.12 with pip and virtual environment support. Use Git to clone the repository, or download and extract its ZIP from GitHub. SQLite works out of the box with the standard Python distribution. For the PostgreSQL setup, you also need a running server, a database, and a role with access to its schema. Python dependency versions are listed in [requirements.txt](requirements.txt).
+Use Python 3.12, pip, and Git. SQLite is included with Python. PostgreSQL is optional.
 
-## Local installation
-
-1. On the GitHub repository page, select **Code → HTTPS** and copy the clone URL.
-2. Replace `YOUR_CLONE_URL` below with that URL. If you downloaded the ZIP, open a terminal in the extracted folder containing `main.py` and skip these two commands.
+**1. Clone the repository.** While JWT authentication is on its feature branch, use:
 
 ```shell
-git clone YOUR_CLONE_URL mini-blog-api
+git clone --branch feature/jwt-auth https://github.com/Orlando-Alvarez/mini-blog-api.git
 cd mini-blog-api
 ```
 
-3. Create a virtual environment, install the dependencies, and start the development server. On Windows, run:
+**2. Create a virtual environment and install dependencies.** The root [requirements.txt](requirements.txt) lists the runtime dependencies, including PyJWT and the form parser used by the login endpoint.
+
+Windows PowerShell:
 
 ```powershell
 py -3.12 -m venv env
 .\env\Scripts\python -m pip install -r requirements.txt
-.\env\Scripts\fastapi dev main.py
 ```
 
-On macOS or Linux, create the environment with `python3.12 -m venv env` and use `env/bin/python` and `env/bin/fastapi` for the next two commands.
+macOS or Linux:
 
-With the default settings, the first startup creates `blog.db` in the working directory. Open [Swagger UI](http://127.0.0.1:8000/docs) to try the endpoints, or view the [OpenAPI schema](http://127.0.0.1:8000/openapi.json).
-
-## Try it
-
-In Swagger UI, expand **POST /posts**, select **Try it out**, paste the following body, and select **Execute**.
-
-```json
-{
-  "title": "My first API post",
-  "content": "Today I connected my blog to a database.",
-  "author": {"name": "Alex", "email": "alex@example.com"},
-  "tags": [{"name": "python"}, {"name": "fastapi"}]
-}
+```bash
+python3.12 -m venv env
+env/bin/python -m pip install -r requirements.txt
 ```
 
-A successful request returns **201** and the saved post, including its ID. Use that ID with **GET /posts/{post_id}**. Try [searching for the post](http://127.0.0.1:8000/posts?Search=first) or [filtering by tag](http://127.0.0.1:8000/post/by-tags?tags=python). Sending the example twice returns **409** because titles must be unique.
+**3. Set a signing key and start the API.** Run these commands from the repository root. The default SQLite configuration creates `blog.db` in the working directory.
 
-## Endpoints
+Windows PowerShell:
 
-| Method | Path | Behavior |
-| --- | --- | --- |
-| GET | `/` | Return the welcome message. |
-| POST | `/posts` | Create a post. Authors are reused by email and tags by name. |
-| GET | `/posts` | Search, sort, and paginate posts. The response includes `items`, totals, and previous/next page flags. |
-| GET | `/posts/{post_id}` | Read one post. Set `include_content=false` to return only its ID and title. |
-| PUT | `/posts/{post_id}` | Update the supplied title or content. Omitted fields keep their values. |
-| DELETE | `/posts/{post_id}` | Delete a post and return **204**. |
-| GET | `/post/by-tags` | Find posts matching any supplied tag. Repeat the parameter, e.g. `?tags=python&tags=fastapi`. |
-
-**Listing posts.** Use `Search` (capital S, 3–50 characters) for a case-insensitive title search. The older `text` parameter is deprecated. Pages start at 1. The default page size is 10 and `per_page` accepts 1–50. Sort with `order_by=id|title` and `direction=asc|desc`; the default is ascending ID.
-
-**Creating posts.** Supply a unique title of 3–100 characters and a `tags` array. Use `[]` for an untagged post. Each tag name is 2–20 characters. An author is optional and takes a name and email address. Supply 10–100 characters for content, or omit it to use the default. For updates, send a string for each field you want to change.
-
-## Use PostgreSQL
-
-Create a database and login role on your PostgreSQL server. In the repository root, create a local `.env` file using your own connection details:
-
-```dotenv
-DATABASE_URL=postgresql+psycopg://blog_user:your_password@localhost:5432/mini_blog
+```powershell
+$env:SECRET_KEY = .\env\Scripts\python -c "import secrets; print(secrets.token_urlsafe(32))"
+.\env\Scripts\fastapi dev app/main.py
 ```
 
-URL-encode special characters in the password. Restart the API after changing the connection. The application creates missing tables on startup, so the role needs permission to create tables in the target schema. If PostgreSQL reports “permission denied for schema public”, connect to **the target database** as the schema owner or administrator and grant the application role access:
+macOS or Linux:
+
+```bash
+export SECRET_KEY="$(env/bin/python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+env/bin/fastapi dev app/main.py
+```
+
+Open [Swagger UI](http://127.0.0.1:8000/docs) to try the API, or inspect the [OpenAPI schema](http://127.0.0.1:8000/openapi.json). Generating a new signing key invalidates tokens issued with the previous key.
+
+### Use PostgreSQL instead of SQLite
+
+Create a PostgreSQL database and login role, then set `DATABASE_URL` in the same terminal **before** starting FastAPI. For example, in PowerShell:
+
+```powershell
+$env:DATABASE_URL = "postgresql+psycopg://blog_user:YOUR_PASSWORD@localhost:5432/mini_blog"
+```
+
+Replace the example values with your local credentials and URL-encode special characters in the password. On macOS or Linux, set the same variable with `export DATABASE_URL="..."`. With the current import order, setting database and signing variables in the shell makes them available when the database engine and security module initialize.
+
+The app creates missing tables on startup. If PostgreSQL reports `permission denied for schema public`, connect to the **target database** as its schema owner or administrator and grant the application role access:
 
 ```sql
 GRANT USAGE, CREATE ON SCHEMA public TO blog_user;
 ```
 
-The schema contains `posts`, `authors`, `tags`, and the `post_tags` association table. In DBeaver, connect to the database named in your URL and expand **Schemas → public → Tables** after starting the API. Local credentials, virtual environments, and SQLite database files are excluded by `.gitignore`.
+The database contains `posts`, `authors`, `tags`, and `post_tags`. The last table connects posts to tags.
+
+## Try the publishing workflow
+
+1. Open Swagger UI and select **Authorize**. Use a demo account from `FAKE_USERS` in [the authentication router](app/api/v1/auth/router.py). The login endpoint accepts `username` and `password` as form fields and issues a bearer token valid for 30 minutes.
+2. Call **GET `/api/v1/auth/me`** to check which identity the token represents.
+3. Open **POST `/posts`**, select **Try it out**, and submit the example below.
+
+```json
+{
+  "title": "My first API post",
+  "content": "Today I published a post through the API.",
+  "author": {"name": "Alex", "email": "alex@example.com"},
+  "tags": [{"name": "python"}, {"name": "fastapi"}]
+}
+```
+
+A successful request returns **201** and the post ID. Use that ID with **GET `/posts/{post_id}`**. You can also [search for the title](http://127.0.0.1:8000/posts?Search=first) or [filter by tag](http://127.0.0.1:8000/posts/by-tags?tags=python). When using an HTTP client outside Swagger, send `Authorization: Bearer <access_token>` on protected requests.
+
+## Endpoints
+
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| POST | `/api/v1/auth/login` | Demo credentials | Issue an access token. |
+| GET | `/api/v1/auth/me` | Bearer token | Return the current username and email. |
+| GET | `/posts` | Public | Search, sort, and paginate posts. |
+| GET | `/posts/by-tags` | Public | Match any supplied tag, e.g. `?tags=python&tags=fastapi`. |
+| GET | `/posts/{post_id}` | Public | Read a post. Use `include_content=false` for an ID and title summary. |
+| POST | `/posts` | Bearer token | Create a post with an optional author and a required tags array. |
+| PUT | `/posts/{post_id}` | Bearer token | Update the supplied title or content. |
+| DELETE | `/posts/{post_id}` | Bearer token | Delete a post and return **204**. |
+
+**Search and pagination.** `Search` is case-sensitive as a parameter name and performs a case-insensitive title search. It accepts 3–50 characters. The older `text` parameter is deprecated. Pages start at 1, `per_page` defaults to 10 and accepts 1–50, and results can be sorted by `id` or `title` in `asc` or `desc` order.
+
+**Post creation.** Titles must be unique and contain 3–100 characters. Supply 10–100 characters for content, or omit it to use the default. Use `tags: []` for an untagged post. Each tag name accepts 2–20 characters.
 
 ## Current structure
 
 ```text
-.
-├── main.py            # Database setup, ORM models, validation, and HTTP routes
-├── requirements.txt   # Python dependencies
-├── .gitignore         # Local files excluded from version control
-└── README.md          # Setup and API reference
+app/
+├── main.py                 # Creates the application and registers the routers
+├── core/
+│   ├── db.py               # Engine, shared model base, and database sessions
+│   └── security.py         # Token creation, decoding, and current-user dependency
+├── models/
+│   ├── __init__.py
+│   ├── author.py
+│   ├── post.py             # Post model and post_tags association table
+│   └── tag.py
+└── api/v1/
+    ├── auth/
+    │   ├── router.py       # Login and current-user routes
+    │   └── schemas.py
+    └── posts/
+        ├── router.py       # HTTP endpoints
+        ├── repository.py   # Queries and persistence operations
+        └── schemas.py      # Post, author, tag, and pagination schemas
+requirements.txt            # Runtime dependencies and versions
+README.md
 ```
 
 ## Current limitations
 
-- The API is intended for local development. Anyone who can reach the server can create, update, or delete posts.
-- Startup creates missing tables. Changing a model that maps to an existing table requires a separate schema change.
-- Updates support title and content only. Authors and tags are assigned when creating a post.
-- Requesting a page beyond the last page returns the last page's items, while the response echoes the requested page number.
+- Authentication uses in-memory demo accounts with plaintext passwords. Any authenticated demo user can modify any post. The author attached to a post is separate from the identity that signs in.
+- Invalid or expired tokens can produce a server error because the current exception handlers raise helper functions instead of calling them. The experimental `/posts/secure` route is also shadowed by `/posts/{post_id}`. Use `/api/v1/auth/me` to check a token.
+- Startup creates missing tables. Changes to existing database schemas still require a separate migration step.
+- Requesting a page beyond the last page returns the last page’s items while the response echoes the requested page number.
 
-## Next phase
-
-The next milestone is to move database configuration, models, request schemas, and routes out of `main.py`. The refactor is complete when the existing post workflow still works through the documented endpoints and the installation instructions point to the new entry point.
+## Development milestones
 
 | Status | Milestone |
 | --- | --- |
-| Implemented | Single-module API in `main.py` with persistent post CRUD, author and tag relationships, search, sorting, and pagination. |
-| Planned | Split the application into modules for configuration, models, and API features. |
-| Planned | Introduce Alembic migrations to track changes to existing database schemas. |
-| Planned | Add Docker setup for running the project in containers. |
-
+| Implemented | Persistent post CRUD, author and tag relationships, search, sorting, and pagination. |
+| Implemented | Modular layout for database configuration, models, request schemas, and repository queries. |
+| Implemented on `feature/jwt-auth` | Demo login, JWT access tokens, a current-user endpoint, and authenticated post writes. |
+| Planned | Alembic migrations for versioned schema changes. |
+| Planned | Docker setup for reproducible local development. |
