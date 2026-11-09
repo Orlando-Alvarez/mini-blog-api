@@ -36,8 +36,8 @@ class PostCreate(BaseModel):
         examples= ["Contenido"],
         description="Contenido"
     )
-    tags: List[Tag] = Field(examples= ['[{"name":"Orlando"}]'])
-    author: Optional[Author] = None
+    tags: List[Tag] = Field(examples= ['[{"name":"FastAPI"}]'])
+    # author: Optional[Author] = None
 
 class PostUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=3, max_length=100)
